@@ -1,11 +1,30 @@
 import librosa
+import whisper
 import numpy as np
+import shutil
+
+
+whisper_model = None
 
 def get_average(values):
     return float(np.mean(values))
 
 def get_median(values):
     return float(np.median(values))
+
+def get_lyrics(audio_file):
+    if shutil.which("ffmpeg") is None:
+        return "ffmpeg was not found. Whisper needs ffmpeg to transcribe audio."
+    global whisper_model
+
+    if whisper_model is None:
+        whisper_model = whisper.load_model("medium")
+    try:
+        lyrics = whisper_model.transcribe(audio_file, fp16=False)
+    except (FileNotFoundError, RuntimeError) as error:
+        return f"Error when transcribing: {error}"
+
+    return lyrics.get("text", "")
 
 def energy_change(sections):
     if len(sections) < 2:
@@ -16,11 +35,18 @@ def energy_change(sections):
     peak_section = max(sections, key = lambda section: section["energy"])
     peak_time = (peak_section["start_time"] + peak_section["end_time"]) / 2
 
-    peak_str = f"The song starts quietly and builds strongly, reaching its peak around section {peak_section['section']} or {peak_time // 60:.0f}:{int(peak_time % 60):02}."
-    if last_energy < first_energy * 0.6:
+    minutes = int(peak_time // 60)
+    seconds = int(peak_time % 60)
+
+    if peak_section["energy"] > first_energy * 2:
+        peak_str = f"The song starts quietly and builds strongly, reaching its peak around section {peak_section['section']} or {minutes}:{seconds:02}."
+    else:
+        peak_str = f"The song reaches its highest energy around section {peak_section['section']} or {minutes}:{seconds:02}."
+
+    if last_energy < peak_section["energy"] * 0.6:
         return peak_str + " The song becomes calmer toward the end."
     else:
-        return peak_str + " The song keeps a fairly steady energy level."
+        return peak_str + " The song keeps a fairly steady energy level after its peak."
 
 def analyze_song(audio_file, section_length = 5):
     y, sr = librosa.load(audio_file, sr = 22050, mono = True)
@@ -101,5 +127,13 @@ def analyze_song(audio_file, section_length = 5):
     }
 
     energy_analysis = energy_change(sections)
+    lyrics = get_lyrics(audio_file)
 
-    return avg_results, sections, energy_analysis
+    song_data = {
+        "overall": avg_results,
+        #"sections": sections,
+        "energy_analysis": energy_analysis,
+        "lyrics": lyrics
+    }
+
+    return song_data

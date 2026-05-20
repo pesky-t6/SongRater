@@ -1,8 +1,6 @@
 from extractor import analyze_song
 
-results, sections, energy_analysis = analyze_song("songs/Billie Jean.mp3")
+song_data = analyze_song("songs/Black Hole Sun.mp3")
 
-for section in sections:
-    print(section, "\n")
-print(results, "\n")
-print(energy_analysis)
+print(song_data)
+
