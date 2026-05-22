@@ -17,96 +17,20 @@ def get_median(values):
 # get the song's lyrics
 def get_lyrics(audio_file):
     if shutil.which("ffmpeg") is None:
-        return {
-            "transcript": "",
-            "words": [],
-            "model": "whisper_medium",
-            "warning": "ffmpeg was not found. Whisper needs ffmpeg to transcribe audio."
-        }
+        return "ffmpeg was not found. Whisper needs ffmpeg to transcribe audio."
     global whisper_model
 
     if whisper_model is None:
         whisper_model = whisper.load_model("medium")
     try:
-        lyrics = whisper_model.transcribe(audio_file, fp16=False, word_timestamps=True)
+        lyrics = whisper_model.transcribe(audio_file, fp16=False)
     except (FileNotFoundError, RuntimeError) as error:
         return f"Error when transcribing: {error}"
 
-    words = []
-
-    for segment in lyrics.get("segments", []):
-        for word_info in segment.get("words", []):
-            word = {
-                "word": word_info.get("word", "").strip(),
-                "start": float(word_info.get("start")),
-                "end": float(word_info.get("end")),
-                "probability": float(word_info.get("probability", 0))
-            }
-
-            if word["word"] != "" and word["start"] is not None and word["end"] is not None:
-                words.append(word)
-
-    return {
-        "transcript": lyrics.get("text", ""),
-        "words": words,
-        "model": "whisper_medium",
-        "warning": "Lyrics were automatically transcribed and word timestamps are approximate."
-    }
-
-# add the timestaps to each of the words
-def lyric_timing_by_section(words, sections):
-    lyric_sections = []
-
-    for section in sections:
-        start_time = section["start_time"]
-        end_time = section["end_time"]
-        section_duration = end_time - start_time
-
-        section_words = []
-
-        for word in words:
-            if word["start"] >= start_time and word["start"] < end_time:
-                section_words.append(word)
-
-        word_count = len(section_words)
-
-        if word_count > 0:
-            word_durations = []
-
-            for word in section_words:
-                duration = word["end"] - word["start"]
-
-                if duration > 0:
-                    word_durations.append(duration)
-
-            avg_word_duration = get_average(word_durations) if len(word_durations) > 0 else 0
-            lyric_density = word_count / section_duration
-
-            longest_word = max(
-                section_words,
-                key = lambda word: word["end"] - word["start"]
-            )
-
-            longest_word_duration = longest_word["end"] - longest_word["start"]
-        else:
-            avg_word_duration = 0
-            lyric_density = 0
-            longest_word_duration = 0
-
-        lyric_sections.append({
-            "section": section["section"],
-            "start_time": start_time,
-            "end_time": end_time,
-            "word_count": word_count,
-            "lyric_density": round(lyric_density, 2),
-            "avg_word_duration": round(avg_word_duration, 2),
-            "longest_word_duration": round(longest_word_duration, 2)
-        })
-
-    return lyric_sections
+    return lyrics.get("text", "")
 
 # calculates the change in energy over the song's length
-def energy_change(sections):
+def get_energy_analysis(sections, count=7):
     if len(sections) < 2:
         return "Song isn't long enough to analyze energy changes."
 
@@ -114,6 +38,29 @@ def energy_change(sections):
     last_energy = sections[-1]["energy"]
     peak_section = max(sections, key = lambda section: section["energy"])
     peak_time = (peak_section["start_time"] + peak_section["end_time"]) / 2
+
+    top_sections = sorted(
+        sections,
+        key = lambda section: section["energy"],
+        reverse = True
+    )[:count]
+
+    top_energy_sections = []
+
+    for section in top_sections:
+        section_time = (section["start_time"] + section["end_time"]) / 2
+        section_minutes = int(section_time // 60)
+        section_seconds = int(section_time % 60)
+
+        top_energy_sections.append({
+            "section": section["section"],
+            "time": f"{section_minutes}:{section_seconds:02}",
+            "energy": section["energy"],
+            "brightness": section["brightness"],
+        })
+
+    energy_growth_ratio = peak_section["energy"] / first_energy if first_energy > 0 else 0
+    ending_drop_from_peak = 1 - (last_energy / peak_section["energy"]) if peak_section["energy"] > 0 else 0
 
     minutes = int(peak_time // 60)
     seconds = int(peak_time % 60)
@@ -124,9 +71,22 @@ def energy_change(sections):
         peak_str = f"The song reaches its highest energy around section {peak_section['section']} or {minutes}:{seconds:02}."
 
     if last_energy < peak_section["energy"] * 0.6:
-        return peak_str + " The song becomes calmer toward the end."
+        peak_str += " The song becomes calmer toward the end."
     else:
-        return peak_str + " The song keeps a fairly steady energy level after its peak."
+        peak_str += " The song keeps a fairly steady energy level after its peak."
+    
+    return {
+        "summary": peak_str,
+        "peak_section": peak_section,
+        "peak_time": f"{minutes}:{seconds:02}",
+        "intro_energy": first_energy,
+        "peak_energy": peak_section["energy"],
+        "outro_energy": last_energy,
+        "energy_growth_ratio": energy_growth_ratio,
+        "ending_drop_from_peak": ending_drop_from_peak,
+        "top_energy_sections": top_energy_sections
+    }
+
 
 # full analysis of the song
 def analyze_song(audio_file, section_length = 5):
@@ -207,7 +167,7 @@ def analyze_song(audio_file, section_length = 5):
         "texture": round(avg_mfcc, 4)
     }
 
-    energy_analysis = energy_change(sections)
+    energy_analysis = get_energy_analysis(sections)
     lyrics = get_lyrics(audio_file)
 
     
@@ -217,12 +177,8 @@ def analyze_song(audio_file, section_length = 5):
             "section_length_seconds": section_length,
             "number_of_sections": len(sections)
         },
-        "energy_analysis": energy_analysis,
-        "lyrics": {
-            "transcript": lyrics["transcript"],
-            "model": lyrics["model"],
-            "warning": lyrics["warning"]
+        "energy_profile": energy_analysis,
+        "lyrics": lyrics
     }
-}
 
     return song_data
