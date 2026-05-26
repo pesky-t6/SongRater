@@ -26,6 +26,17 @@ Important:
 - Section-level tempo estimates are intentionally omitted because short-window BPM detection can be noisy.
 - The review must be 3-5 sentences and must explain how the audio energy profile and lyrics work together.
 
+Rating rules:
+- You must always provide a rating_out_of_100 from 1 to 100.
+- Only use 0 if the audio analysis completely failed.
+- Do not leave strengths, weaknesses, or rating_reason empty.
+- Give at least 2 strengths and at least 2 weaknesses.
+- A high-energy song is not automatically a good song.
+- Reward clear structure, emotional impact, lyrical depth, variation, memorable build-up, and strong contrast.
+- Penalize overly repetitive lyrics, generic themes, weak progression, flat structure, lack of contrast, or a mismatch between lyrics and audio energy.
+- If the song has a steady energy profile with limited contrast, mention that as a possible weakness.
+- If the lyrics repeat the same idea heavily, mention repetition as a possible weakness without quoting the lyrics.
+
 Song data:
 {json.dumps(song_data, indent = 2)}
 
@@ -42,8 +53,8 @@ Return only a JSON object with these exact fields:
             "reason": ""
         }}
     ],
-    "strengths": [],
-    "weaknesses": [],
+    "strengths": ["Describe what the song does well overall."],
+    "weaknesses": ["Describe the song's weakpoints, where it struggles, and what can be improved."],
     "rating_out_of_100": 0,
     "rating_reason": "",
     "transcript_warnings": []
