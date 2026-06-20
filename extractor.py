@@ -39,6 +39,14 @@ def get_energy_analysis(sections, count=7):
     peak_section = max(sections, key = lambda section: section["energy"])
     peak_time = (peak_section["start_time"] + peak_section["end_time"]) / 2
 
+    #calculate biggest beat drop
+    biggest_energy_spike_section = 0
+    biggest_energy_spike = 0;
+    for sectionNum in range(len(sections)-1):
+        if (sections[sectionNum+1]["energy"] - sections[sectionNum]["energy"] > biggest_energy_spike):
+            biggest_energy_spike = sections[sectionNum+1]["energy"] - sections[sectionNum]["energy"]
+            biggest_energy_spike_section = sectionNum
+
     top_sections = sorted(
         sections,
         key = lambda section: section["energy"],
@@ -48,13 +56,18 @@ def get_energy_analysis(sections, count=7):
     top_energy_sections = []
 
     for section in top_sections:
-        section_time = (section["start_time"] + section["end_time"]) / 2
-        section_minutes = int(section_time // 60)
-        section_seconds = int(section_time % 60)
+        section_start_time = section["start_time"]
+        section_end_time = section["end_time"]
+
+        section_start_minutes = int(section_start_time // 60)
+        section_start_seconds = int(section_start_time % 60)
+
+        section_end_minutes = int(section_end_time // 60)
+        section_end_seconds = int(section_end_time % 60)
 
         top_energy_sections.append({
             "section": section["section"],
-            "time": f"{section_minutes}:{section_seconds:02}",
+            "time": f"{section_start_minutes}:{section_start_seconds:02} - {section_end_minutes}:{section_end_seconds:02}",
             "energy": section["energy"],
             "brightness": section["brightness"],
         })
@@ -84,7 +97,12 @@ def get_energy_analysis(sections, count=7):
         "outro_energy": last_energy,
         "energy_growth_ratio": energy_growth_ratio,
         "ending_drop_from_peak": ending_drop_from_peak,
-        "top_energy_sections": top_energy_sections
+        "top_energy_sections": top_energy_sections,
+        "biggest_energy_spike": {
+            "from_section": sections[biggest_energy_spike_section]["section"],
+            "to_section": sections[biggest_energy_spike_section + 1]["section"],
+            "energy_change": round(biggest_energy_spike, 4)
+        }
     }
 
 
@@ -148,7 +166,7 @@ def analyze_song(audio_file, section_length = 5):
             "section": section_number,
             "start_time": round(start_time, 2),
             "end_time": round(end_time, 2),
-            "tempo_bpm": round(tempo, 2),
+            # "tempo_bpm": round(tempo, 2),
             "energy": round(avg_section_rms, 4),
             "brightness": round(avg_brightness, 2)
         }

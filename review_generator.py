@@ -1,79 +1,143 @@
 import json
 import requests
+import time
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
+base_ratings_summary = """
+General rating calibration:
+- 95-100: legendary, exceptional replay value, major emotional or musical identity
+- 90-94: elite song with strong structure, impact, and replay value
+- 85-89: great song with clear strengths and minor limitations
+- 75-84: good song with solid qualities but less standout identity
+- 60-74: average or mixed song with noticeable weaknesses
+- below 60: weak song with major issues in structure, replay value, or cohesion
+
+Category ratings are out of 100.
+Do not reward energy alone. Reward structure, contrast, emotional impact, lyrical cohesion, and replay value.
+"""
+
+output_schema = {
+        "review": "",
+        "mood": "",
+        "audio_observations": [],
+        "lyrical_observations": [
+            {
+                "theme": "",
+                "reason": ""
+            }
+        ],
+        "standout_moments": [
+            {
+                "section": 0,
+                "time": "",
+                "reason": ""
+            }
+        ],
+        "strengths": [],
+        "weaknesses": [],
+        "ratings": {
+            "emotional_impact": "<integer 1-100>",
+            "energy_progression": "<integer 1-100>",
+            "lyrical_cohesion": "<integer 1-100>",
+            "replay_value": "<integer 1-100>",
+            "production_interest": "<integer 1-100>"
+        },
+        "rating_out_of_100": "<integer 1-100>",
+        "rating_reason": "",
+        "transcript_warnings": []
+}
+
+def calculate_final_rating(ratings):
+    return round(
+        ratings["emotional_impact"] * 0.25 +
+        ratings["energy_progression"] * 0.25 +
+        ratings["lyrical_cohesion"] * 0.20 +
+        ratings["replay_value"] * 0.20 +
+        ratings["production_interest"] * 0.10
+    )
+
 # prompt
-def build_review_prompt(song_data):
+def build_review_prompt(song_data, song_name = None, artist = None):
     try:
-        with open("data/base_ratings.csv", "r") as file:
+        with open("data/base_ratings.csv", "r", encoding = "utf-8") as file:
             base_ratings = file.read()
     except Exception:
         base_ratings = "(Could not load data/base_ratings.csv)"
 
-    song_json = json.dumps(song_data, indent=2)
+    song_json = json.dumps(song_data, indent = 2)
 
-    prompt = """You are an AI music review assistant.
+    prompt = f"""
+    You are an AI music review assistant.
 
-Use only the song data provided below.
-Do not look up the song online.
-Do not use outside knowledge about the artist, song, album, popularity, awards, or public opinion.
+    Rate the song using only:
+    1. The rating scale summary
+    2. The extracted song data
 
-Important:
-- The audio analysis is the main evidence.
-- The lyrics are supporting evidence.
-- If lyrics were automatically transcribed, they may contain errors. Transcription mistakes should not lower the song's rating.
-- Do not quote lyrics directly.
-- Ignore transcript lines that seem like video artifacts, outro speech, captions, or unrelated phrases.
-- Do not make claims about vocals, guitar, drums, production quality, or musicianship unless the provided data supports it.
-- The review must mention at least one audio-based observation.
-- The standout moments must come from the energy profile, section data, or clear song structure.
-- The tempo_bpm in overall is the only tempo value that should be used.
-- Do not claim the song changes BPM unless song_data includes a specific tempo_change_summary.
-- Section-level tempo estimates are intentionally omitted because short-window BPM detection can be noisy.
-- The review must be 3-5 sentences and must explain how the audio energy profile and lyrics work together.
+    Do not use outside knowledge.
+    Do not identify the song title, artist, album, or popularity from the lyrics.
+    Do not mention specific songs from the rating scale.
+    Do not quote or closely paraphrase lyrics.
+    Do not invent instruments, vocals, guitar, drums, mixing quality, or production polish unless directly supported by the input.
 
-Rating rules:
-- You must always provide a rating_out_of_100 from 1 to 100.
-- Only use 0 if the audio analysis completely failed.
-- Do not leave strengths, weaknesses, or rating_reason empty.
-- Give at least 2 strengths and at least 2 weaknesses.
-- A high-energy song is not automatically a good song.
-- Reward clear structure, emotional impact, lyrical depth, variation, memorable build-up, and strong contrast.
-- Penalize overly repetitive lyrics, generic themes, weak progression, flat structure, lack of contrast, or a mismatch between lyrics and audio energy.
-- If the song has a steady energy profile with limited contrast, mention that as a possible weakness.
-- If the lyrics repeat the same idea heavily, mention repetition as a possible weakness without quoting the lyrics.
+    Tempo rule:
+    Do not say tempo varies, ranges, shifts, changes, or fluctuates unless song_data includes tempo_change_summary.
+    If only tempo_bpm is provided, describe it as a single estimated tempo.
 
-Base Ratings to judge off of:
-"""
-    prompt += base_ratings + "\n\n"
-    prompt += "Song data:\n" + song_json + "\n\n"
+    Vocal rule:
+    Do not mention vocal range, vocal delivery, singing quality, or artist performance unless song_data includes explicit vocal analysis.
 
-    prompt += """Return only a JSON object with these exact fields:
-{
-    "review": "",
-    "mood": "",
-    "audio_observations": [],
-    "lyrical_observations": ["Describe broad themes only. No quoted lyric phrases."],
-    "standout_moments": [
-        {
-            "section": 0,
-            "time": "",
-            "reason": ""
-        }
-    ],
-    "strengths": ["Describe what the song does well overall."],
-    "weaknesses": ["Describe the song's weakpoints, where it struggles, and what can be improved."],
-    "rating_out_of_100": 0,
-    "rating_reason": "",
-    "transcript_warnings": []
-}
-"""
+    Lyrics rule:
+    Do not quote lyrics. Do not put transcript phrases in quotation marks. Summarize lyrical themes only.
 
+    Rating completeness rule:
+    The ratings object must include exactly:
+    emotional_impact, energy_progression, lyrical_cohesion, replay_value, production_interest.
+    Each must be an integer from 1 to 100.
+
+    Grounding rule:
+    Each audio observation must reference an actual field name and value from song_data, such as intro_energy=0.0609 or peak_time=2:02.
+    Do not use vague input signals like "Dynamic Range" unless that exact field exists.
+
+    The extracted audio fields are valid evidence.
+    You must use the energy profile, peak time, top energy sections, tempo, and lyric themes.
+
+    Rating rules:
+    - rating_out_of_100 must be an integer from 1 to 100.
+    - Never return 0 unless the song data is empty or unusable.
+    - Never return placeholder text like "<insert rating>".
+    - Never leave review, mood, strengths, weaknesses, standout_moments, or rating_reason empty.
+    - Give at least 2 strengths.
+    - Give at least 2 weaknesses.
+    - Every strength and weakness must reference a specific input signal.
+    - If the rating reason mentions a weakness, it must also appear in weaknesses.
+    - If lyric transcription looks corrupted, mention that in transcript_warnings, but do not lower the rating for that alone.
+
+    Rating scale summary:
+    {base_ratings_summary}
+
+    Song data:
+    {song_json}
+
+    Return only valid JSON with exactly these keys:
+
+    review: string, 3 to 5 sentences
+    mood: string
+    audio_observations: list of objects with input_signal and description
+    lyrical_observations: list of objects with theme and reason
+    standout_moments: list of objects with section, time, and reason
+    strengths: list of strings
+    weaknesses: list of strings
+    ratings: object with emotional_impact, energy_progression, lyrical_cohesion, replay_value, production_interest as integers from 1 to 100
+    rating_out_of_100: integer from 1 to 100
+    rating_reason: string
+    transcript_warnings: list of strings
+
+    Return JSON only."""
     return prompt
 
-
 def generate_review(song_data, model = "llama3.2"):
+    startTime = time.time()
     prompt = build_review_prompt(song_data)
 
     payload = {
@@ -94,9 +158,16 @@ def generate_review(song_data, model = "llama3.2"):
         return {
             "error": "Ollama connected, but the model took too long to respond. Try a shorter prompt or smaller model."
         }
+    
+    endTime = time.time()
+    print("total time: ", endTime-startTime)
+
 
     result = response.json()
     review_text = result.get("response", "{}")
+
+    review_json = json.loads(review_text)
+    review_json["rating_out_of_100"] = calculate_final_rating(review_json["ratings"])
 
     try:
         return json.loads(review_text)
