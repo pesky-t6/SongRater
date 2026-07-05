@@ -136,7 +136,7 @@ def build_review_prompt(song_data, song_name = None, artist = None):
     Return JSON only."""
     return prompt
 
-def generate_review(song_data, model = "llama3.2"):
+def get_review(song_data, model = "llama3.2"):
     startTime = time.time()
     prompt = build_review_prompt(song_data)
 

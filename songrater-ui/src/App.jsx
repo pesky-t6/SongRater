@@ -36,16 +36,36 @@ function App() {
     formData.append("lyrics", lyrics);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/analyze-energy", {
-        method: "POST",
-        body: formData,
-      });
+      const analyzedEnergy = await fetch(
+        "http://127.0.0.1:8000/analyze-energy",
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
 
-      const data = await response.json();
-      console.log(data);
+      const data = await analyzedEnergy.json();
 
       setGraphData(data.graph_points || []);
       setPeak(data.peak || null);
+    } catch (error) {
+      console.error("Failed to analyze song:", error);
+      alert("Could not analyze song. Make sure the local backend is running.");
+    } finally {
+      setLoading(false);
+    }
+
+    try {
+      const generatedReview = await fetch(
+        "http://127.0.0.1:8000/generate-review",
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+
+      const data = await generatedReview.json();
+      console.log(data);
     } catch (error) {
       console.error("Failed to analyze song:", error);
       alert("Could not analyze song. Make sure the local backend is running.");

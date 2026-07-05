@@ -1,11 +1,11 @@
 from extractor import analyze_song
-from review_generator import generate_review
+from review_generator import get_review
 import json
 import time
 
 startTime = time.time()
 song_data = analyze_song("songs/Billie Jean.mp3", "")
-review = generate_review(song_data)
+review = get_review(song_data)
 endTime = time.time()
 
 print(json.dumps(song_data, indent = 4))
