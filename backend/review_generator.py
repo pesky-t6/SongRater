@@ -45,7 +45,8 @@ output_schema = {
         },
         "rating_out_of_100": "<integer 1-100>",
         "rating_reason": "",
-        "transcript_warnings": []
+        "transcript_warnings": [],
+        "review time": "",
 }
 
 def calculate_final_rating(ratings):
@@ -136,8 +137,9 @@ def build_review_prompt(song_data, song_name = None, artist = None):
     Return JSON only."""
     return prompt
 
-def get_review(song_data, model = "llama3.2"):
-    startTime = time.time()
+# models: llama3.2, qwen3:8b, qwen3:14b, gpt-oss:20b
+def get_review(song_data, model = "qwen3:8b"):
+    startTime = time.perf_counter()
     prompt = build_review_prompt(song_data)
 
     payload = {
@@ -158,9 +160,13 @@ def get_review(song_data, model = "llama3.2"):
         return {
             "error": "Ollama connected, but the model took too long to respond. Try a shorter prompt or smaller model."
         }
+    except requests.exceptions.HTTPError:
+        return {
+            "error": "Issue with the model most likely, try running ollama pull <model_name>"
+        }
     
-    endTime = time.time()
-    print("total time: ", endTime-startTime)
+    elapsed_time = time.perf_counter() - startTime
+    print(f"total time: {elapsed_time:.3f}s")
 
 
     result = response.json()
@@ -176,5 +182,6 @@ def get_review(song_data, model = "llama3.2"):
 
     review_json["rating_out_of_100"] = calculate_final_rating(review_json["ratings"])
     review_json["lyrics"] = song_data.get("lyrics", "")
+    review_json["review time"] = round(elapsed_time, 3)
 
     return review_json

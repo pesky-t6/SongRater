@@ -35,6 +35,8 @@ function App() {
     formData.append("file", file);
     formData.append("lyrics", lyrics);
 
+    var energyData;
+
     try {
       const analyzedEnergy = await fetch(
         "http://127.0.0.1:8000/analyze-energy",
@@ -44,10 +46,7 @@ function App() {
         },
       );
 
-      const data = await analyzedEnergy.json();
-
-      setGraphData(data.graph_points || []);
-      setPeak(data.peak || null);
+      energyData = await analyzedEnergy.json();
     } catch (error) {
       console.error("Failed to analyze song:", error);
       alert("Could not analyze song. Make sure the local backend is running.");
@@ -63,6 +62,9 @@ function App() {
           body: formData,
         },
       );
+
+      setGraphData(energyData.graph_points || []);
+      setPeak(energyData.peak || null);
 
       const data = await generatedReview.json();
       console.log(data);

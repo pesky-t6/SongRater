@@ -2,7 +2,7 @@ import librosa
 import whisper
 import numpy as np
 import shutil
-
+import time
 
 whisper_model = None
 
@@ -21,7 +21,8 @@ def get_lyrics(audio_file):
     global whisper_model
 
     if whisper_model is None:
-        whisper_model = whisper.load_model("medium")
+        # models: base, small, medium
+        whisper_model = whisper.load_model("small")
     try:
         lyrics = whisper_model.transcribe(audio_file, fp16=False)
     except (FileNotFoundError, RuntimeError) as error:
@@ -103,6 +104,9 @@ def get_energy_analysis(sections, count=7):
 
 # full analysis of the song
 def analyze_song(audio_file, lyrics, section_length = 5):
+
+    startTime = time.time()
+
     y, sr = librosa.load(audio_file, sr = 22050, mono = True)
 
     # length of song
@@ -184,6 +188,7 @@ def analyze_song(audio_file, lyrics, section_length = 5):
     if lyrics == "":
         lyrics = get_lyrics(audio_file)
 
+    endTime = time.time()
     
     song_data = {
         "overall": avg_results,
@@ -192,7 +197,8 @@ def analyze_song(audio_file, lyrics, section_length = 5):
             "number_of_sections": len(sections)
         },
         "energy_profile": energy_analysis,
-        "lyrics": lyrics
+        "lyrics": lyrics,
+        "data extraction time": endTime-startTime
     }
 
     return song_data
