@@ -196,6 +196,7 @@ def analyze_song(audio_file, lyrics, section_length = 5):
             "section_length_seconds": section_length,
             "number_of_sections": len(sections)
         },
+        "all_sections": sections,
         "energy_profile": energy_analysis,
         "lyrics": lyrics,
         "data extraction time": endTime-startTime

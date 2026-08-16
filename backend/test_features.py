@@ -4,7 +4,7 @@ import json
 import time
 
 startTime = time.time()
-song_data = analyze_song("songs/Billie Jean.mp3", "")
+song_data = analyze_song("songs/Billie Jean.mp3", "Test")
 review = get_review(song_data)
 endTime = time.time()
 
