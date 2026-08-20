@@ -25,17 +25,19 @@ function App() {
   const [graphData, setGraphData] = useState([]);
   const [peak, setPeak] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [review, setReview] = useState(null);
+  const [error, setError] = useState("");
 
   async function analyzeSong() {
-    if (!file) return;
+    if (!file || loading) return;
 
     setLoading(true);
+    setError("");
+    setReview(null);
 
     const formData = new FormData();
     formData.append("file", file);
     formData.append("lyrics", lyrics);
-
-    var energyData;
 
     try {
       const analyzedEnergy = await fetch(
@@ -46,15 +48,15 @@ function App() {
         },
       );
 
-      energyData = await analyzedEnergy.json();
-    } catch (error) {
-      console.error("Failed to analyze song:", error);
-      alert("Could not analyze song. Make sure the local backend is running.");
-    } finally {
-      setLoading(false);
-    }
+      if (!analyzedEnergy.ok) {
+        throw new Error("Energy analysis failed");
+      }
 
-    try {
+      const energyData = await analyzedEnergy.json();
+
+      setGraphData(energyData.graph_points || []);
+      setPeak(energyData.peak || null);
+
       const generatedReview = await fetch(
         "http://127.0.0.1:8000/generate-review",
         {
@@ -63,14 +65,17 @@ function App() {
         },
       );
 
-      setGraphData(energyData.graph_points || []);
-      setPeak(energyData.peak || null);
+      if (!generatedReview.ok) {
+        throw new Error("Review generation failed");
+      }
 
-      const data = await generatedReview.json();
-      console.log(data);
+      const reviewData = await generatedReview.json();
+      setReview(reviewData);
     } catch (error) {
       console.error("Failed to analyze song:", error);
-      alert("Could not analyze song. Make sure the local backend is running.");
+      setError(
+        "Could not analyze song. Make sure the local backend is running.",
+      );
     } finally {
       setLoading(false);
     }
@@ -101,7 +106,7 @@ function App() {
         />
 
         <button onClick={analyzeSong} disabled={!file || loading}>
-          {loading ? "Analyzing..." : "Analyze energy graph"}
+          {loading ? "Analyzing Song..." : "Analyze Song"}
         </button>
       </section>
 
@@ -160,6 +165,118 @@ function App() {
           </ResponsiveContainer>
         )}
       </section>
+      {error && (
+        <section className="error-card">
+          <p>{error}</p>
+        </section>
+      )}
+      {review && (
+        <section className="review-card">
+          <div className="rating-header">
+            <div className="overall-rating">
+              {review.rating_out_of_100}
+              <span>/100</span>
+            </div>
+
+            <div>
+              <h2>Song Review</h2>
+              <p className="mood">{review.mood}</p>
+            </div>
+          </div>
+
+          <p className="review-text">{review.review}</p>
+        </section>
+      )}
+      {review?.ratings && (
+        <section className="ratings-card">
+          <h2>Ratings</h2>
+
+          {Object.entries(review.ratings).map(([category, score]) => (
+            <div className="rating-row" key={category}>
+              <span>
+                {category
+                  .replaceAll("_", " ")
+                  .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+              </span>
+
+              <div className="rating-bar">
+                <div className="rating-fill" style={{ width: `${score}%` }} />
+              </div>
+
+              <strong>{score}</strong>
+            </div>
+          ))}
+        </section>
+      )}
+      {review && (
+        <section className="feedback-grid">
+          <div className="strength-card">
+            <h3>Strengths</h3>
+
+            <ul>
+              {review.strengths?.map((strength, index) => (
+                <li key={index}>{strength}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="weakness-card">
+            <h3>Weaknesses</h3>
+
+            {review.weaknesses?.length > 0 ? (
+              <ul>
+                {review.weaknesses.map((weakness, index) => (
+                  <li key={index}>{weakness}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>No major weaknesses detected.</p>
+            )}
+          </div>
+        </section>
+      )}
+      {review?.lyrical_observations?.length > 0 && (
+        <section className="themes-card">
+          <h2>Lyrical Themes</h2>
+
+          {review.lyrical_observations.map((observation, index) => (
+            <div className="theme" key={index}>
+              <h3>{observation.theme}</h3>
+              <p>{observation.reason}</p>
+            </div>
+          ))}
+        </section>
+      )}
+      {review?.standout_moments?.length > 0 && (
+        <section className="moments-card">
+          <h2>Standout Moments</h2>
+
+          {review.standout_moments.map((moment, index) => (
+            <div className="moment" key={index}>
+              <strong>{moment.time}</strong>
+              <span>Section {moment.section}</span>
+              <p>{moment.reason}</p>
+            </div>
+          ))}
+        </section>
+      )}
+      {review?.lyrics && (
+        <details className="transcript-card">
+          <summary>View transcription</summary>
+          <p>{review.lyrics}</p>
+        </details>
+      )}
+      {review?.transcript_warnings?.length > 0 && (
+        <section className="warning-card">
+          <h3>Transcription Warnings</h3>
+
+          <ul>
+            {review.transcript_warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
+        </section>
+      )}
     </main>
   );
 }
