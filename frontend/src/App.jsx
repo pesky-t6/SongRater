@@ -19,6 +19,56 @@ function formatTime(seconds) {
   return `${mins}:${secs}`;
 }
 
+function Waveform() {
+  return (
+    <span className="waveform" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
+      <span />
+    </span>
+  );
+}
+
+function ScoreGauge({ score }) {
+  const pct = Math.max(0, Math.min(100, score));
+  return (
+    <div className="gauge" style={{ "--pct": pct }}>
+      <div className="overall-rating">
+        {score}
+        <span>/ 100</span>
+      </div>
+    </div>
+  );
+}
+
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      style={{
+        background: "#0d1530",
+        border: "1px solid #1f2c52",
+        borderRadius: 8,
+        padding: "8px 12px",
+        fontFamily: "IBM Plex Mono, monospace",
+        fontSize: 12,
+        color: "#eef1fb",
+      }}
+    >
+      <div style={{ color: "#9aa5c7", marginBottom: 4 }}>
+        {formatTime(label)}
+      </div>
+      {payload.map((entry) => (
+        <div key={entry.dataKey} style={{ color: entry.color }}>
+          {entry.name}: {Number(entry.value).toFixed(2)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const [file, setFile] = useState(null);
   const [lyrics, setLyrics] = useState("");
@@ -39,6 +89,9 @@ function App() {
     formData.append("file", file);
     formData.append("lyrics", lyrics);
 
+    setGraphData([]);
+    setPeak(null);
+
     try {
       const analyzedEnergy = await fetch(
         "http://127.0.0.1:8000/analyze-energy",
@@ -54,9 +107,6 @@ function App() {
 
       const energyData = await analyzedEnergy.json();
 
-      setGraphData(energyData.graph_points || []);
-      setPeak(energyData.peak || null);
-
       const generatedReview = await fetch(
         "http://127.0.0.1:8000/generate-review",
         {
@@ -69,8 +119,12 @@ function App() {
         throw new Error("Review generation failed");
       }
 
+      setGraphData(energyData.graph_points || []);
+      setPeak(energyData.peak || null);
+
       const reviewData = await generatedReview.json();
       setReview(reviewData);
+      console.log(reviewData);
     } catch (error) {
       console.error("Failed to analyze song:", error);
       setError(
@@ -84,9 +138,14 @@ function App() {
   return (
     <main className="app">
       <section className="hero">
-        <h1>SongRater</h1>
+        <span className="brand-mark">
+          <Waveform />
+          SongRater
+        </span>
+        <h1>Know your track's signal.</h1>
         <p>
-          Analyze your song locally. Nothing is uploaded unles you choose to
+          Analyze your song locally — energy curve, peak moment, and a full
+          critical read. Nothing leaves your machine unless you choose to
           publish it.
         </p>
       </section>
@@ -106,7 +165,7 @@ function App() {
         />
 
         <button onClick={analyzeSong} disabled={!file || loading}>
-          {loading ? "Analyzing Song..." : "Analyze Song"}
+          {loading ? "Analyzing signal…" : "Analyze song"}
         </button>
       </section>
 
@@ -114,31 +173,52 @@ function App() {
         <h2>Energy overview</h2>
 
         {graphData.length === 0 ? (
-          <p className="empty-state">Upload a song to see its energy curve.</p>
+          <p className="empty-state">
+            No input detected. Upload a track to see its energy curve.
+          </p>
         ) : (
           <ResponsiveContainer width="100%" height={420}>
             <LineChart data={graphData}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <defs>
+                <linearGradient id="rawGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4f7cff" stopOpacity={0.5} />
+                  <stop offset="100%" stopColor="#4f7cff" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#1f2c52" strokeDasharray="3 3" />
               <XAxis
                 dataKey="time"
                 type="number"
                 domain={["dataMin", "dataMax"]}
                 tickFormatter={formatTime}
-                label={{ value: "Time", position: "insideBottom", offset: -5 }}
+                stroke="#5f6b93"
+                tick={{ fill: "#9aa5c7", fontSize: 12 }}
+                label={{
+                  value: "Time",
+                  position: "insideBottom",
+                  offset: -5,
+                  fill: "#5f6b93",
+                }}
               />
               <YAxis
-                label={{ value: "Energy", angle: -90, position: "insideLeft" }}
+                stroke="#5f6b93"
+                tick={{ fill: "#9aa5c7", fontSize: 12 }}
+                label={{
+                  value: "Energy",
+                  angle: -90,
+                  position: "insideLeft",
+                  fill: "#5f6b93",
+                }}
               />
-              <Tooltip
-                labelFormatter={(value) => `Time: ${formatTime(value)}`}
-              />
+              <Tooltip content={<ChartTooltip />} />
 
               <Line
                 type="monotone"
                 dataKey="energy"
                 name="Raw energy"
                 dot={false}
-                strokeOpacity={0.35}
+                stroke="#4f7cff"
+                strokeOpacity={0.3}
               />
 
               <Line
@@ -146,7 +226,8 @@ function App() {
                 dataKey="smoothed_energy"
                 name="Smoothed energy"
                 dot={false}
-                strokeWidth={2}
+                stroke="#7d9fff"
+                strokeWidth={2.5}
               />
 
               {peak && (
@@ -155,10 +236,11 @@ function App() {
                   label={{
                     value: `Peak ${formatTime(peak.mid_time)}`,
                     position: "insideTopLeft",
-                    fill: "green",
+                    fill: "#ffb454",
+                    fontSize: 12,
                   }}
                   strokeDasharray="4 4"
-                  stroke="green"
+                  stroke="#ffb454"
                 />
               )}
             </LineChart>
@@ -173,13 +255,10 @@ function App() {
       {review && (
         <section className="review-card">
           <div className="rating-header">
-            <div className="overall-rating">
-              {review.rating_out_of_100}
-              <span>/100</span>
-            </div>
+            <ScoreGauge score={review.rating_out_of_100} />
 
             <div>
-              <h2>Song Review</h2>
+              <h2>Song review</h2>
               <p className="mood">{review.mood}</p>
             </div>
           </div>
@@ -237,7 +316,7 @@ function App() {
       )}
       {review?.lyrical_observations?.length > 0 && (
         <section className="themes-card">
-          <h2>Lyrical Themes</h2>
+          <h2>Lyrical themes</h2>
 
           {review.lyrical_observations.map((observation, index) => (
             <div className="theme" key={index}>
@@ -249,7 +328,7 @@ function App() {
       )}
       {review?.standout_moments?.length > 0 && (
         <section className="moments-card">
-          <h2>Standout Moments</h2>
+          <h2>Standout moments</h2>
 
           {review.standout_moments.map((moment, index) => (
             <div className="moment" key={index}>
@@ -268,7 +347,7 @@ function App() {
       )}
       {review?.transcript_warnings?.length > 0 && (
         <section className="warning-card">
-          <h3>Transcription Warnings</h3>
+          <h3>Transcription warnings</h3>
 
           <ul>
             {review.transcript_warnings.map((warning, index) => (

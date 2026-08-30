@@ -131,13 +131,22 @@ output_schema = {
 }
 
 def calculate_final_rating(ratings):
-    return round(
-        ratings["emotional_impact"] * 0.25 +
-        ratings["energy_progression"] * 0.25 +
-        ratings["lyrical_cohesion"] * 0.20 +
-        ratings["replay_value"] * 0.20 +
-        ratings["production_interest"] * 0.10
-    )
+    if ratings.get("lyrical_cohesion", 0) != 0:
+        score = (
+            ratings["emotional_impact"] * 0.25 +
+            ratings["energy_progression"] * 0.25 +
+            ratings["lyrical_cohesion"] * 0.20 +
+            ratings["replay_value"] * 0.20 +
+            ratings["production_interest"] * 0.10
+        )
+    else:
+        score = (
+            ratings["emotional_impact"] * 0.30 +
+            ratings["energy_progression"] * 0.30 +
+            ratings["replay_value"] * 0.25 +
+            ratings["production_interest"] * 0.15
+        )
+    return round(score)
 
 # prompt
 def build_review_prompt(song_data, song_name = None, artist = None):
