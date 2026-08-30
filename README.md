@@ -1,28 +1,54 @@
 # SongRater
 
-An AI-powered music rating system that analyzes song metadata, lyrics, and audio-derived features to generate structured ratings across categories such as vocals, production, replay value, and overall score.
+Analyze a song locally: upload an audio file, see its energy curve, and get a written review with per-category ratings.
 
-## What It Does
+## How it works
 
-SongRater extracts measurable song features and sends them to a local LLM through Ollama. The model uses calibration examples from a rating dataset to learn how different rating categories relate, while still judging each new song independently.
+The frontend is a React app that sends your audio file (and optional lyrics) to a local backend running on `http://127.0.0.1:8000`. The backend does two things:
 
-## Tech Stack
+- `POST /analyze-energy` — returns energy-over-time data points and the detected peak
+- `POST /generate-review` — returns a written review, mood, category ratings, strengths/weaknesses, and (if lyrics or transcription are available) lyrical themes and standout moments
 
-- Python
-- Ollama
-- Librosa
-- Whisper
-- Pandas
-- CSV-based rating calibration
+Nothing is uploaded anywhere else unless you choose to.
 
-## Key Features
+## Requirements
 
-- Audio feature extraction using tempo, energy, brightness, and section-based analysis
-- Lyric transcription support through Whisper
-- Structured AI-generated song reviews
-- Calibration from existing ratings without using the dataset as an answer key
-- Local model workflow with no dependency on paid APIs
+- Node.js
+- A backend running locally on port 8000 that implements the two endpoints above
 
-## Current Status
+## Setup
 
-In active development. Core rating prompt and feature extraction pipeline are being tested and refined.
+```bash
+cd backend
+python -m venv venv
+
+# Windows:
+venv\Scripts\activate
+
+# MacOS:
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+# Ollama needs seperate installation, then:
+ollama pull qwen3:8b
+
+# Run the backend
+uvicorn backend_api:app --reload --host 127.0.0.1 --port 8000
+
+# New terminal:
+cd frontend
+npm install
+npm run dev
+```
+
+Make sure your backend is running before analyzing a song, or requests will fail.
+
+## Project structure
+
+- `App.jsx` — main UI and fetch logic
+- `App.css` — styling
+
+## Notes
+
+This is a local-first tool. If the backend isn't running, the app will show an error instead of failing silently.
